@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.venv/
+env/
+venv/
+.env
+
+# 环境配置（含密钥）
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# 数据解析与输出 (根据你的 log 路径)
+backend/output/
+backend/scratch/
+*.log
+
+# 数据和模型（太大）
+backend/models/
+*.bin
+*.pt
+*.pth
+chroma_db/          # Chroma 本地数据库
+
+md5.text
+
+# 文档草稿（不提交到 GitHub）
+doc/**/*.txt
+doc/**/*.md
+doc/**/*.markdown
+
+# 前端依赖与构建
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# 系统文件
+.DS_Store
+Thumbs.db
