@@ -68,3 +68,6 @@ uvicorn>=0.23.0
 
 # Deepseek / OpenAI API support
 langchain-openai>=0.1.0
+
+# Reranker support
+FlagEmbedding>=1.0.0

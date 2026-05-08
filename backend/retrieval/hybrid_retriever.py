@@ -53,7 +53,7 @@ def rrf_fuse(
 
 @dataclass
 class HybridRetrieverService:
-    """混合召回：向量并行 BM25，最终 RRF 融合。"""
+    """混合召回：向量并行 BM25，最终 RRF 融合，可选 Rerank 精排。"""
 
     get_vector_docs: Callable[[str, int], list[Document]]
     get_all_docs: Callable[[], list[Document]]
@@ -62,6 +62,7 @@ class HybridRetrieverService:
     bm25_k: int = 20
     final_k: int = 6
     rrf_k: int = 60
+    reranker: any = None  # 传入 RerankerService 实例
 
     _bm25_retriever: BM25Retriever | None = None
     _bm25_built_on_count: int = -1
@@ -108,6 +109,17 @@ class HybridRetrieverService:
             logger.warning("Both vector and BM25 returned empty results")
             return []
 
-        fused = rrf_fuse([vector_docs, bm25_docs], top_k=self.final_k, rrf_k=self.rrf_k)
-        logger.debug(f"RRF fusion produced {len(fused)} final docs")
-        return fused
+        # 第一步：RRF 融合（取较多候选用于精排）
+        # 如果有 reranker，RRF 融合可以多取一些，比如 15-20 个
+        fusion_top_k = 15 if self.reranker and self.reranker.enabled else self.final_k
+        fused = rrf_fuse([vector_docs, bm25_docs], top_k=fusion_top_k, rrf_k=self.rrf_k)
+        logger.debug(f"RRF fusion produced {len(fused)} candidate docs")
+
+        # 第二步：Rerank 精排
+        if self.reranker and self.reranker.enabled:
+            logger.info("Starting reranking step...")
+            final_docs = self.reranker.rerank(query, fused, top_k=self.final_k)
+            logger.info(f"Reranking finished, returned {len(final_docs)} final docs")
+            return final_docs
+
+        return fused[:self.final_k]

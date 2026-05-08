@@ -34,6 +34,13 @@ hybrid_bm25_k = 20
 hybrid_final_k = 6
 hybrid_rrf_k = 60
 
+# Rerank
+rerank_enabled = True
+# rerank_model_name = "BAAI/bge-reranker-v2-m3"  # 选用的精排模型
+rerank_model_name = os.path.join(BASE_DIR, "models", "bge-reranker-v2-m3")
+rerank_top_k = 6                               # 精排后保留的文档数
+rerank_device = "cpu"                          # 强制使用 CPU，节省显存
+
 # Backward compatible alias
 similarity_threshold = retrieval_top_k
 

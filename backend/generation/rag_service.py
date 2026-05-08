@@ -15,6 +15,7 @@ from core.logger import logger
 from infra.vector_store import VectorStoreService
 from memory.history_store import get_history
 from retrieval.hybrid_retriever import HybridRetrieverService
+from retrieval.reranker import RerankerService
 
 
 def _print_prompt(prompt):
@@ -30,6 +31,7 @@ class RagService:
             # embedding=DashScopeEmbeddings(model=config.embedding_model_name)
             embedding=OllamaEmbeddings(model=config.embedding_model_name, base_url="http://127.0.0.1:11434")
         )
+        self.reranker = RerankerService()
         self.prompt_template = ChatPromptTemplate.from_messages(
             [
                 (
@@ -79,6 +81,7 @@ class RagService:
             bm25_k=config.hybrid_bm25_k,
             final_k=config.hybrid_final_k,
             rrf_k=config.hybrid_rrf_k,
+            reranker=self.reranker,
         )
         self.chat_model = _build_chat_model()
         self.chain = self._build_chain()

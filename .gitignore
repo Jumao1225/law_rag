@@ -25,7 +25,8 @@ backend/models/
 *.bin
 *.pt
 *.pth
-chroma_db/          # Chroma 本地数据库
+*.sqlite3
+backend/chroma_db/         # Chroma 本地数据库
 
 md5.text
 

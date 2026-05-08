@@ -2,14 +2,14 @@
 
 本项目是一个专门针对法律问答场景设计的 **端到端 RAG (检索增强生成) 系统**。它不仅实现了基础的文档检索，还针对法律文本的特殊结构（编、章、节、条）进行了深度优化，确保法律建议的专业性与准确性。
 
-当前架构：**FastAPI 后端 + Vue 3 (Vite) 前端 + 混合检索 (Vector & BM25) + MinerU 引擎**。
+当前架构：**FastAPI 后端 + Vue 3 (Vite) 前端 + 混合检索 (Vector & BM25) + BGE-Reranker 精排 + MinerU 引擎**。
 
 ---
 
 ## 项目能力
 
 - 文档入库：支持上传 PDF / 文本，进行法律文本预处理、分条分块、向量化并持久化到 Chroma。
-- 混合召回：向量检索 + BM25 并行召回，通过 RRF 融合后返回高相关证据片段。
+- 混合召回：向量检索 + BM25 并行召回，通过 RRF 融合后由 BGE-Reranker 进行精排，返回高相关证据片段。
 - 生成回答：使用 DeepSeek 模型按刑法场景优化的提示词输出结构化 Markdown 回复。
 - 会话管理：会话列表、新建、置顶、删除、持久化历史记录。
 - 记忆压缩：滑动窗口 + 摘要压缩 + Token 预算裁剪，兼顾长对话与上下文成本。
@@ -20,6 +20,7 @@
 - 主回答模型：`deepseek-v4-flash`
 - 轻量摘要模型：`deepseek-v4-pro`
 - 向量模型：`nomic-embed-text:latest`（通过 Ollama）
+- 精排模型：`BAAI/bge-reranker-v2-m3`（本地 CPU 推理）
 
 ## 核心特性
 
@@ -29,8 +30,9 @@
 *   **MinerU 深度解析**：集成 MinerU 引擎，针对复杂布局的法律 PDF 文件进行 Markdown 级的高精度还原，保留表格与列表结构。
 
 ### 2. 混合召回与重排序
-*   **双路并发检索**：结合 **Chroma 向量检索**（语义匹配）与 **BM25 算法**（关键词精确匹配）。
-*   **RRF 融合算法**：采用倒数排名融合 (Reciprocal Rank Fusion) 对两路结果进行归一化处理，显著提升首条检索结果的召回率。
+*   **多路并发检索**：结合 **Chroma 向量检索**（语义匹配）与 **BM25 算法**（关键词精确匹配）。
+*   **RRF 融合算法**：采用倒数排名融合 (Reciprocal Rank Fusion) 对多路结果进行初步筛选。
+*   **BGE 精排模型**：集成 `bge-reranker-v2-m3`。在融合结果中提取前 15 个候选，进行二次深度评分，有效过滤噪音，确保最终透传给 LLM 的 5 个片段是最具说服力的法条。
 
 ### 3. 专业法律 Prompt 驱动
 *   **角色增强**：内置深度优化的法学专家 Prompt。
@@ -61,7 +63,8 @@ law_rag/
 │   │   ├── pdf_parser.py       # PDF -> Markdown 解析（含 MinerU）
 │   │   └── ingest_service.py   # 入库服务
 │   ├── retrieval/
-│   │   └── hybrid_retriever.py # 向量 + BM25 + RRF
+│   │   ├── hybrid_retriever.py # 向量 + BM25 + RRF
+│   │   └── reranker.py         # BGE Reranker 封装（支持 CPU）
 │   ├── memory/
 │   │   └── history_store.py    # 会话持久化与记忆压缩策略
 │   ├── chroma_db/              # 运行后生成：向量库
@@ -151,7 +154,26 @@ npm run dev
 - `hybrid_final_k`: 融合后最终证据数
 - `hybrid_rrf_k`: RRF 融合参数
 
-### 6.2 记忆压缩相关
+### 6.2 精排相关 (Rerank)
+
+- `rerank_enabled`: 是否开启精排
+- `rerank_model_name`: 模型名称或本地路径
+- `rerank_top_k`: 精排后最终保留的证据数
+- `rerank_device`: 运行设备（默认 `cpu`，对小显存友好）
+
+#### 💡 模型离线部署 (推荐)
+为了在弱网或无网环境下运行，建议将模型下载到本地 `backend/models` 目录：
+
+1. **国内用户推荐 (ModelScope)**:
+   ```powershell
+   pip install modelscope
+   python -c "from modelscope import snapshot_download; snapshot_download('BAAI/bge-reranker-v2-m3', local_dir='backend/models/bge-reranker-v2-m3')"
+   python -c "from modelscope import snapshot_download; snapshot_download('opendatalab/PDF-Extract-Kit-1.0/models', local_dir='backend/models/')"
+   ```
+2. **配置文件修改**:
+   在 `backend/core/config.py` 中，将 `rerank_model_name` 指向该本地路径即可。
+
+### 6.3 记忆压缩相关
 
 - `memory_keep_recent_rounds`: 保留最近轮次（当前 3）
 - `memory_summary_trigger_rounds`: 摘要触发轮次（当前 5）
@@ -161,7 +183,7 @@ npm run dev
 - `memory_summary_tag`: 内部摘要标识
 - `memory_compression_debug`: 是否打印压缩日志（当前开启）
 
-### 6.3 MinerU 配置 (PDF 高精度解析)
+### 6.4 MinerU 配置 (PDF 高精度解析)
 项目通过 `backend/ingestion/pdf_parser.py` 深度集成了 MinerU，用于将 PDF 转换为高质量的 Markdown。
 - **配置文件**：`backend/mineru.json`
   - `models-dir`: 定义了模型权重的加载路径。
