@@ -31,7 +31,7 @@
         }
     },
     "models-dir": {
-        "pipeline": "D:\\PyProgram\\law_rag\\backend\models",
+        "pipeline": "D:\\PyProgram\\law_rag\\backend",
         "vlm": ""
     },
     "config_version": "1.3.1"
